@@ -1,0 +1,93 @@
+version: '3.8'
+
+services:
+  # Primary Relational Database (Step 4 Deep Dive 2 & 3)
+  postgres:
+    image: postgres:16-alpine
+    container_name: bitly_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgrespassword
+      POSTGRES_DB: bitly
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/schema.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d bitly"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # In-Memory Cache & Distributed Coordination (LRU Cache + INCRBY Counter)
+  redis:
+    image: redis:7-alpine
+    container_name: bitly_redis
+    restart: unless-stopped
+    command: >
+      redis-server 
+      --maxmemory 256mb 
+      --maxmemory-policy allkeys-lru 
+      --save "" 
+      --appendonly yes
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # Bitly Application Service Instance
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: bitly_api
+    restart: unless-stopped
+    environment:
+      PORT: 3000
+      BASE_URL: http://localhost:8080
+      DATABASE_URL: postgres://postgres:postgrespassword@postgres:5432/bitly
+      REDIS_URL: redis://redis:6379
+      COUNTER_BATCH_SIZE: 1000
+      COUNTER_KEY: bitly:global_counter
+      INSTANCE_ID: write-worker-1
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    expose:
+      - "3000"
+
+  # React Application Frontend (SPA Dashboard)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: bitly_frontend
+    restart: unless-stopped
+    expose:
+      - "80"
+
+  # Nginx Reverse Proxy & Load Balancer (SSL Termination, Rate Limiting & Routing)
+  nginx:
+    image: nginx:alpine
+    container_name: bitly_nginx
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - api
+      - frontend
+
+volumes:
+  postgres_data:
+  redis_data:

@@ -1,0 +1,29 @@
+[Unit]
+Description=Bitly High-Throughput Node.js API Service
+After=network.target postgresql.service redis.service
+Wants=postgresql.service redis.service
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/bitly/backend
+Environment=NODE_ENV=production
+EnvironmentFile=/var/www/bitly/backend/.env
+ExecStart=/usr/bin/node /var/www/bitly/backend/dist/server.js
+Restart=always
+RestartSec=5
+StandardOutput=syslog
+StandardError=syslog
+SyslogIdentifier=bitly-api
+
+# Security Hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+
+# Resource limits (100M URLs capability)
+LimitNOFILE=65535
+
+[Install]
+WantedBy=multi-user.target

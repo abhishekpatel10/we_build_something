@@ -1,0 +1,138 @@
+# ==============================================================================
+# Monorepo .gitignore: Distributed Systems Portfolio (Bitly, Ticketmaster, Dropbox)
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# 1. Environment Variables & Secrets
+# ------------------------------------------------------------------------------
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+*.cert
+
+# Keep example & production environment templates
+!.env.example
+!*.env.example
+!.env.production
+
+# ------------------------------------------------------------------------------
+# 2. Node.js & JavaScript / TypeScript
+# ------------------------------------------------------------------------------
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Frontend & Backend Build Artifacts
+dist/
+build/
+out/
+.next/
+.nuxt/
+.cache/
+.parcel-cache/
+.turbo/
+.eslintcache/
+
+# TypeScript declaration cache
+*.tsbuildinfo
+
+# ------------------------------------------------------------------------------
+# 3. Python & Django
+# ------------------------------------------------------------------------------
+# Byte-compiled / optimized files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Distribution / packaging
+develop-eggs/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environments
+venv/
+.venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# Local SQLite databases (PostgreSQL is used in production/docker)
+*.sqlite3
+*.db
+db.sqlite3
+
+# Django media & static collection root
+media/
+staticfiles/
+
+# Celery
+celerybeat-schedule
+celerybeat.pid
+
+# ------------------------------------------------------------------------------
+# 4. Logs, Storage & Data Dumps
+# ------------------------------------------------------------------------------
+*.log
+logs/
+*.sql
+*.tar.gz
+
+# Docker volume data mounts
+postgres_data/
+redis_data/
+es_data/
+minio_data/
+
+# ------------------------------------------------------------------------------
+# 5. Testing & Code Coverage
+# ------------------------------------------------------------------------------
+.coverage
+.coverage.*
+htmlcov/
+.pytest_cache/
+.tox/
+.nox/
+coverage/
+
+# ------------------------------------------------------------------------------
+# 6. Operating System & Editor Metadata
+# ------------------------------------------------------------------------------
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+desktop.ini
+$RECYCLE.BIN/
+
+# IDE & Editors
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+*.swp
+*.swo
+*~

@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bitly Architecture & URL Shortener | System Design Implementation</title>
+  <meta name="description" content="Production-grade URL Shortener implementing the Hello Interview Bitly system design with distributed batch counters, Base62 bijective encoding, and Redis LRU caching.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <div class="background-mesh"></div>
+
+  <!-- Top Navigation -->
+  <header class="navbar">
+    <div class="nav-container">
+      <div class="brand">
+        <div class="brand-logo">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+            <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+          </svg>
+        </div>
+        <div class="brand-text">
+          <span class="brand-name">Bitly<span class="brand-accent">Engine</span></span>
+          <span class="brand-badge">System Design v1</span>
+        </div>
+      </div>
+
+      <!-- Live Cluster Telemetry Pills -->
+      <div class="telemetry-bar">
+        <div class="telemetry-pill" id="telemetry-redis">
+          <span class="pill-dot"></span>
+          <span class="pill-label">Redis Cache:</span>
+          <span class="pill-val" id="redis-status-val">Detecting...</span>
+        </div>
+        <div class="telemetry-pill" id="telemetry-db">
+          <span class="pill-dot"></span>
+          <span class="pill-label">Database:</span>
+          <span class="pill-val" id="db-status-val">Detecting...</span>
+        </div>
+        <div class="telemetry-pill accent-pill" id="telemetry-counter">
+          <span class="pill-icon">⚡</span>
+          <span class="pill-label">Batch Range:</span>
+          <span class="pill-val" id="counter-range-val">...</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="main-content">
+    <!-- Hero Section -->
+    <section class="hero-section">
+      <div class="badge-container">
+        <span class="glow-pill">Phase 1: Architecture & Node.js Implementation</span>
+      </div>
+      <h1 class="hero-title">
+        High-Throughput URL Shortener <br>
+        <span class="gradient-text">Engineered for 100M DAU</span>
+      </h1>
+      <p class="hero-subtitle">
+        Zero-collision sequential counter, bijective Feistel cipher obfuscation, 
+        atomic Redis batch reservation, and sub-millisecond 302 redirects.
+      </p>
+
+      <!-- URL Shortener Form Card -->
+      <div class="glass-card shortener-card">
+        <form id="shorten-form">
+          <div class="input-group">
+            <div class="input-icon">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="2" y1="12" x2="22" y2="12"></line>
+                <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+              </svg>
+            </div>
+            <input 
+              type="url" 
+              id="original-url-input" 
+              placeholder="Paste a long URL (e.g., https://hellointerview.com/blog/system-design-url-shortener)" 
+              required
+              autocomplete="off"
+            />
+            <button type="button" id="paste-btn" class="secondary-btn" title="Paste from clipboard">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+              </svg>
+              Paste
+            </button>
+            <button type="submit" id="shorten-btn" class="primary-btn">
+              <span>Shorten URL</span>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+                <polyline points="12 5 19 12 12 19"></polyline>
+              </svg>
+            </button>
+          </div>
+
+          <!-- Advanced Options Toggle -->
+          <div class="advanced-toggle-bar">
+            <button type="button" id="toggle-advanced-btn" class="toggle-link">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="chevron">
+                <polyline points="6 9 12 15 18 9"></polyline>
+              </svg>
+              <span>Custom Alias & Expiration Settings (Optional)</span>
+            </button>
+          </div>
+
+          <!-- Advanced Options Collapsible -->
+          <div class="advanced-options" id="advanced-options-panel">
+            <div class="options-grid">
+              <div class="option-field">
+                <label for="custom-alias-input">Custom Short Alias</label>
+                <div class="alias-input-wrapper">
+                  <span class="alias-domain">bit.ly/</span>
+                  <input type="text" id="custom-alias-input" placeholder="e.g. evan, conf26" pattern="^[a-zA-Z0-9_-]{3,32}$" />
+                </div>
+                <small class="field-hint">3-32 characters (letters, numbers, dashes)</small>
+              </div>
+
+              <div class="option-field">
+                <label for="expiration-select">Link Expiration</label>
+                <select id="expiration-select">
+                  <option value="never">Never expires</option>
+                  <option value="1h">1 Hour</option>
+                  <option value="24h">24 Hours (1 Day)</option>
+                  <option value="7d">7 Days (1 Week)</option>
+                  <option value="30d">30 Days</option>
+                  <option value="custom">Custom Date & Time...</option>
+                </select>
+                <div id="custom-date-container" style="display: none; margin-top: 0.5rem;">
+                  <input type="datetime-local" id="custom-expiry-input" />
+                </div>
+                <small class="field-hint">Expired links return HTTP 410 Gone</small>
+              </div>
+            </div>
+          </div>
+        </form>
+
+        <!-- Result Box (Hidden by default) -->
+        <div id="result-box" class="result-box" style="display: none;">
+          <div class="result-header">
+            <div class="result-meta">
+              <span class="badge-success">Link Created!</span>
+              <span id="result-custom-tag" class="badge-info" style="display: none;">Custom Alias</span>
+              <span id="result-expiry-tag" class="badge-warning" style="display: none;">Expiring</span>
+            </div>
+          </div>
+          <div class="result-row">
+            <div class="result-url-display">
+              <span class="url-label">Short Link:</span>
+              <a href="#" id="result-short-url" target="_blank" class="short-link-anchor">https://...</a>
+            </div>
+            <div class="result-actions">
+              <button type="button" id="copy-btn" class="action-btn">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                </svg>
+                Copy
+              </button>
+              <a href="#" id="test-redirect-btn" target="_blank" class="action-btn primary-action">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                  <polyline points="15 3 21 3 21 9"></polyline>
+                  <line x1="10" y1="14" x2="21" y2="3"></line>
+                </svg>
+                Test 302 Redirect
+              </a>
+              <button type="button" id="view-stats-btn" class="action-btn">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <line x1="18" y1="20" x2="18" y2="10"></line>
+                  <line x1="12" y1="20" x2="12" y2="4"></line>
+                  <line x1="6" y1="20" x2="6" y2="14"></line>
+                </svg>
+                Stats
+              </button>
+            </div>
+          </div>
+          <div class="result-details">
+            <span class="target-title">Target:</span>
+            <span id="result-original-url" class="target-url">https://example.com</span>
+          </div>
+        </div>
+
+        <!-- Notification Banner -->
+        <div id="toast" class="toast"></div>
+      </div>
+    </section>
+
+    <!-- Architecture & Metrics Dashboard Section -->
+    <section class="dashboard-section">
+      <div class="section-tabs">
+        <button class="tab-btn active" data-tab="architecture">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect>
+            <rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect>
+            <line x1="6" y1="6" x2="6.01" y2="6"></line>
+            <line x1="6" y1="18" x2="6.01" y2="18"></line>
+          </svg>
+          System Architecture Visualizer
+        </button>
+        <button class="tab-btn" data-tab="counter">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+          </svg>
+          Distributed Counter (Batch Allocation)
+        </button>
+        <button class="tab-btn" data-tab="history">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"></circle>
+            <polyline points="12 6 12 12 16 14"></polyline>
+          </svg>
+          Recent Links & Analytics
+        </button>
+      </div>
+
+      <!-- Tab Content: Architecture Visualizer -->
+      <div id="tab-architecture" class="tab-content active">
+        <div class="architecture-grid">
+          <div class="arch-card">
+            <div class="arch-card-header">
+              <span class="arch-step">Step 1</span>
+              <h3>Nginx Load Balancer</h3>
+            </div>
+            <p>SSL termination, path-based routing, and dual rate-limiting zones (100 QPS write / 1,000 QPS redirect).</p>
+            <div class="arch-metrics">
+              <span class="metric-tag">Dual Upstreams</span>
+              <span class="metric-tag">Keep-Alive Pooling</span>
+            </div>
+          </div>
+
+          <div class="arch-card">
+            <div class="arch-card-header">
+              <span class="arch-step">Step 2</span>
+              <h3>Node.js Services</h3>
+            </div>
+            <p>Write instances reserve token batches; Read instances process 302 redirects in sub-millisecond time.</p>
+            <div class="arch-metrics">
+              <span class="metric-tag">Feistel Permutation</span>
+              <span class="metric-tag">Base62 Bijective</span>
+            </div>
+          </div>
+
+          <div class="arch-card">
+            <div class="arch-card-header">
+              <span class="arch-step">Step 3</span>
+              <h3>Redis Cache & Counter</h3>
+            </div>
+            <p>Serves LRU cache (80/20 power law distribution) and atomic <code>INCRBY</code> batch reservation.</p>
+            <div class="arch-metrics">
+              <span class="metric-tag">Sub-ms Cache Hit</span>
+              <span class="metric-tag">Atomic Counter</span>
+            </div>
+          </div>
+
+          <div class="arch-card">
+            <div class="arch-card-header">
+              <span class="arch-step">Step 4</span>
+              <h3>PostgreSQL Primary</h3>
+            </div>
+            <p>Relational ACID durability with B-Tree primary key index on <code>short_code</code> for O(log N) lookups.</p>
+            <div class="arch-metrics">
+              <span class="metric-tag">B-Tree PK Index</span>
+              <span class="metric-tag">Click Analytics</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="design-notes-box">
+          <h4>💡 System Design Interview Decisions (Evan's Deep Dives):</h4>
+          <ul class="notes-list">
+            <li><strong>Why 302 Found instead of 301 Moved Permanently?</strong> 301 is aggressively cached by browsers and CDNs, which would blind the service from tracking analytics, user clicks, and enforcing expiration. 302 ensures every request hits our edge.</li>
+            <li><strong>Why Sequential Counter + Feistel instead of Random MD5 Hash?</strong> Random hashing causes the Birthday Paradox collision rate (~880,000 collisions across 1B links), requiring expensive DB pre-checks. Sequential counters have 0% collision rate, and the Feistel cipher obfuscates them into unpredictable codes.</li>
+            <li><strong>Why Batch Allocation?</strong> Write instances reserve chunks of 1,000 IDs via <code>INCRBY</code>. An instance only calls Redis once every 1,000 writes, enabling massive throughput.</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Tab Content: Counter Inspector -->
+      <div id="tab-counter" class="tab-content">
+        <div class="counter-dashboard">
+          <div class="counter-stat-cards">
+            <div class="stat-card">
+              <span class="stat-label">Instance Identifier</span>
+              <span class="stat-number" id="inspector-instance-id">worker-1</span>
+              <span class="stat-sub">Stateless horizontal node</span>
+            </div>
+            <div class="stat-card">
+              <span class="stat-label">Current Offset</span>
+              <span class="stat-number" id="inspector-current-counter">0</span>
+              <span class="stat-sub">Locally allocated index</span>
+            </div>
+            <div class="stat-card">
+              <span class="stat-label">Batch Upper Bound</span>
+              <span class="stat-number" id="inspector-max-counter">0</span>
+              <span class="stat-sub">Redis reserved ceiling</span>
+            </div>
+            <div class="stat-card">
+              <span class="stat-label">Tokens Remaining</span>
+              <span class="stat-number highlight" id="inspector-remaining">0</span>
+              <span class="stat-sub">Before next Redis INCRBY</span>
+            </div>
+          </div>
+
+          <div class="progress-container">
+            <div class="progress-header">
+              <span>Token Allocation Capacity</span>
+              <span id="progress-percent">0%</span>
+            </div>
+            <div class="progress-bar-bg">
+              <div class="progress-bar-fill" id="token-progress-fill" style="width: 0%;"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab Content: Recent Links -->
+      <div id="tab-history" class="tab-content">
+        <div class="table-container">
+          <table class="links-table">
+            <thead>
+              <tr>
+                <th>Short Link</th>
+                <th>Target Destination</th>
+                <th>Clicks</th>
+                <th>Created</th>
+                <th>Status</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="recent-links-tbody">
+              <tr>
+                <td colspan="6" class="empty-state">No shortened URLs yet. Create one above!</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Analytics Modal -->
+  <div id="stats-modal" class="modal-backdrop" style="display: none;">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 id="modal-title">Link Analytics</h3>
+        <button type="button" id="close-modal-btn" class="close-btn">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="modal-summary">
+          <div class="modal-stat">
+            <span class="stat-label">Total Clicks</span>
+            <span class="stat-number" id="modal-clicks-count">0</span>
+          </div>
+          <div class="modal-stat">
+            <span class="stat-label">Target URL</span>
+            <span class="stat-sub" id="modal-target-url" style="word-break: break-all;">-</span>
+          </div>
+        </div>
+
+        <div class="analytics-subsections">
+          <h4>Referrer Breakdown</h4>
+          <div id="modal-referrers-list" class="referrers-list">
+            <div class="empty-hint">No clicks recorded yet.</div>
+          </div>
+
+          <h4 style="margin-top: 1.5rem;">Recent Click Events</h4>
+          <div class="click-events-table-wrapper">
+            <table class="click-events-table">
+              <thead>
+                <tr>
+                  <th>Timestamp</th>
+                  <th>Referrer</th>
+                  <th>Client Agent</th>
+                </tr>
+              </thead>
+              <tbody id="modal-clicks-tbody">
+                <tr><td colspan="3" class="empty-hint">No click events</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>

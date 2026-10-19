@@ -1,0 +1,27 @@
+{
+  "name": "bitly-system-design",
+  "version": "1.0.0",
+  "description": "High-performance URL Shortener system with Node.js/TypeScript backend and React SPA frontend",
+  "private": true,
+  "scripts": {
+    "dev": "npm run dev:backend",
+    "dev:backend": "npm --prefix backend run dev",
+    "dev:frontend": "npm --prefix frontend run dev",
+    "build": "npm run build:all",
+    "build:backend": "npm --prefix backend run build",
+    "build:frontend": "npm --prefix frontend run build",
+    "build:all": "npm --prefix backend run build && npm --prefix frontend run build",
+    "start": "npm --prefix backend start",
+    "test": "npm --prefix backend test"
+  },
+  "keywords": [
+    "url-shortener",
+    "bitly",
+    "system-design",
+    "react",
+    "typescript",
+    "redis",
+    "postgres"
+  ],
+  "license": "MIT"
+}
